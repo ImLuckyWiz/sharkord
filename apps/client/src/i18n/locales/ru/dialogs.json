@@ -5,6 +5,9 @@
   "saveChanges": "Сохранить изменения",
   "confirmActionTitle": "Подтвердить действие",
   "confirmActionMsg": "Вы уверены, что хотите выполнить это действие?",
+  "serverUpdatedTitle": "Сервер обновлён",
+  "serverUpdatedMsg": "Этот сервер был обновлён до новой версии. Обновите страницу, чтобы загрузить последний интерфейс.",
+  "serverUpdatedRefresh": "Обновить",
   "createChannelTitle": "Создать новый канал",
   "channelTypeLabel": "Тип канала",
   "textChannelTitle": "Текстовый канал",
@@ -99,5 +102,8 @@
   "shareSystemAudio": "Транслировать системный звук",
   "shareSystemAudioAllNote": "Sharkord передаёт весь звук, который воспроизводится на компьютере, даже если вы выбрали только одно окно. Выключите звук всего, что другие не должны слышать.",
   "additionalScreenShareSettings": "Дополнительные настройки демонстрации экрана",
-  "screenShareConfirm": "Продолжить"
+  "screenShareConfirm": "Продолжить",
+  "cropImageTitle": "Обрезать изображение",
+  "cropImageZoom": "Масштаб",
+  "failedCropImage": "Не удалось обрезать изображение"
 }

@@ -78,7 +78,13 @@ export const connect = async () => {
   const host = getHostFromServer();
   const trpc = await connectToTRPC(host);
 
-  const { hasPassword, handshakeHash } = await trpc.others.handshake.query();
+  const { hasPassword, handshakeHash, serverVersion } =
+    await trpc.others.handshake.query();
+
+  if (!import.meta.env.DEV && serverVersion !== VITE_APP_VERSION) {
+    openDialog(Dialog.SERVER_UPDATED);
+    return;
+  }
 
   if (hasPassword) {
     // show password prompt
@@ -187,6 +193,10 @@ export const reconnectToServer = (info: TDisconnectInfo) => {
     return;
   }
 
+  if (reconnectAttempt === 0) {
+    playSound(SoundType.SERVER_RECONNECTING);
+  }
+
   reconnectAttempt += 1;
 
   pushVoiceDebugEvent('ws', 'reconnect scheduled', {
@@ -220,6 +230,7 @@ export const reconnectToServer = (info: TDisconnectInfo) => {
       // so reconnecting stays true until setInitialData clears it
       await connect();
       cancelReconnect();
+      playSound(SoundType.SERVER_RECONNECTED);
 
       pushVoiceDebugEvent('ws', 'reconnected', {
         voiceChannelId: currentVoiceChannelIdSelector(store.getState())

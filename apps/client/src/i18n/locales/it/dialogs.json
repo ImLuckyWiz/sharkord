@@ -5,6 +5,9 @@
   "saveChanges": "Salva modifiche",
   "confirmActionTitle": "Conferma azione",
   "confirmActionMsg": "Sei sicuro di voler eseguire questa azione?",
+  "serverUpdatedTitle": "Server aggiornato",
+  "serverUpdatedMsg": "Questo server è stato aggiornato a una nuova versione. Aggiorna per caricare l'interfaccia più recente.",
+  "serverUpdatedRefresh": "Aggiorna",
   "createChannelTitle": "Crea nuovo canale",
   "channelTypeLabel": "Tipo di canale",
   "textChannelTitle": "Canale testuale",
@@ -99,5 +102,8 @@
   "shareSystemAudio": "Condividi l'audio di sistema",
   "shareSystemAudioAllNote": "Sharkord condivide tutto l'audio riprodotto sul tuo computer, anche se scegli una sola finestra. Silenzia ciò che non vuoi far sentire agli altri.",
   "additionalScreenShareSettings": "Impostazioni aggiuntive di condivisione schermo",
-  "screenShareConfirm": "Continua"
+  "screenShareConfirm": "Continua",
+  "cropImageTitle": "Ritaglia immagine",
+  "cropImageZoom": "Zoom",
+  "failedCropImage": "Impossibile ritagliare l'immagine"
 }

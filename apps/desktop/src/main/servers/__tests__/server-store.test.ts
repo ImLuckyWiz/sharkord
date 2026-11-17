@@ -3,7 +3,12 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import type { TServer } from '../../../shared/types';
-import { DEFAULT_SETTINGS, readStore, writeStore } from '../server-store';
+import {
+  DEFAULT_SETTINGS,
+  readStore,
+  STORE_FILE_NAME,
+  writeStore
+} from '../server-store';
 
 const SERVER: TServer = {
   id: 'abc',
@@ -25,7 +30,7 @@ describe('server store', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(path.join(tmpdir(), 'sharkord-desktop-'));
-    filePath = path.join(dir, 'servers.json');
+    filePath = path.join(dir, STORE_FILE_NAME);
   });
 
   afterEach(() => {
@@ -101,6 +106,7 @@ describe('server store', () => {
         dynamicTrayIcon: false,
         autoUpdate: false,
         captureAllAudioOutputs: true,
+        gpuEncoding: false,
         spellcheck: false,
         attenuationEnabled: true,
         attenuationPercent: 75,
@@ -119,6 +125,7 @@ describe('server store', () => {
       dynamicTrayIcon: false,
       autoUpdate: false,
       captureAllAudioOutputs: true,
+      gpuEncoding: false,
       spellcheck: false,
       attenuationEnabled: true,
       attenuationPercent: 75,
@@ -141,6 +148,7 @@ describe('server store', () => {
           dynamicTrayIcon: 'no',
           autoUpdate: 0,
           captureAllAudioOutputs: 'yes',
+          gpuEncoding: 'no',
           spellcheck: 'no',
           attenuationEnabled: 'yes',
           attenuationPercent: 150,
@@ -159,6 +167,7 @@ describe('server store', () => {
       dynamicTrayIcon: true,
       autoUpdate: true,
       captureAllAudioOutputs: false,
+      gpuEncoding: true,
       spellcheck: true,
       attenuationEnabled: false,
       attenuationPercent: 50,
@@ -177,6 +186,7 @@ describe('server store', () => {
       dynamicTrayIcon: true,
       autoUpdate: true,
       captureAllAudioOutputs: false,
+      gpuEncoding: true,
       spellcheck: true,
       attenuationEnabled: false,
       attenuationPercent: 50,
@@ -233,7 +243,7 @@ describe('server store', () => {
   });
 
   test('creates missing parent folders when saving', () => {
-    const nested = path.join(dir, 'a', 'b', 'servers.json');
+    const nested = path.join(dir, 'a', 'b', STORE_FILE_NAME);
 
     writeStore(nested, {
       servers: [SERVER],

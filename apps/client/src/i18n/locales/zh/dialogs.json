@@ -5,6 +5,9 @@
   "saveChanges": "保存更改",
   "confirmActionTitle": "确认操作",
   "confirmActionMsg": "您确定要执行此操作吗？",
+  "serverUpdatedTitle": "服务器已更新",
+  "serverUpdatedMsg": "此服务器已更新到新版本。请刷新以加载最新界面。",
+  "serverUpdatedRefresh": "刷新",
   "createChannelTitle": "创建新频道",
   "channelTypeLabel": "频道类型",
   "textChannelTitle": "文字频道",
@@ -99,5 +102,8 @@
   "shareSystemAudio": "共享系统音频",
   "shareSystemAudioAllNote": "即使你只选择了一个窗口，Sharkord 也会共享电脑上播放的所有声音。请将不想让别人听到的内容静音。",
   "additionalScreenShareSettings": "其他屏幕共享设置",
-  "screenShareConfirm": "继续"
+  "screenShareConfirm": "继续",
+  "cropImageTitle": "裁剪图片",
+  "cropImageZoom": "缩放",
+  "failedCropImage": "裁剪图片失败"
 }

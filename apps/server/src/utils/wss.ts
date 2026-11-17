@@ -17,14 +17,11 @@ import {
 } from '@trpc/server/adapters/ws';
 import http from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
-import {
-  publishVoicePresence,
-  unpublishHiddenChannelFromUser
-} from '../db/publishers';
 import { channelUserCan } from '../db/queries/channels';
 import { getUserRoles } from '../db/queries/roles';
 import { getUserById, getUserByToken } from '../db/queries/users';
 import { getWsInfo } from '../helpers/get-ws-info';
+import { removeUserFromVoice } from '../helpers/remove-user-from-voice';
 import { logger } from '../logger';
 import { eventBus } from '../plugins/event-bus';
 import { enqueueActivityLog } from '../queues/activity-log';
@@ -35,6 +32,9 @@ import { pubsub } from './pubsub';
 import type { Context } from './trpc';
 
 let wss: WebSocketServer | undefined;
+
+const KEEP_ALIVE_PING_MS = 30_000;
+const KEEP_ALIVE_PONG_WAIT_MS = 10_000;
 
 const usersIpMap = new Map<number, string>();
 
@@ -142,9 +142,11 @@ const createContext = async ({
   const getOwnWs = () => ws;
 
   const getUserWs = (userId: number) => {
-    if (!wss) return [];
+    const sockets = userSockets.get(userId);
 
-    return Array.from(wss.clients).filter((client) => client.userId === userId);
+    if (!sockets) return [];
+
+    return Array.from(sockets);
   };
 
   const getStatusById = (userId: number) =>
@@ -238,14 +240,7 @@ const handleSocketClose = async (ws: WebSocket) => {
       voiceRuntime &&
       (!hasOtherSessions || ws.session?.voiceChannelId === voiceRuntime.id)
     ) {
-      voiceRuntime.removeUser(userId);
-
-      await publishVoicePresence(voiceRuntime, ServerEvents.USER_LEAVE_VOICE, {
-        channelId: voiceRuntime.id,
-        userId
-      });
-
-      await unpublishHiddenChannelFromUser(userId, voiceRuntime.id);
+      await removeUserFromVoice(voiceRuntime, userId);
     }
 
     // only mark as offline when there are no other active sessions
@@ -286,7 +281,34 @@ const createWsServer = async (server: http.Server) => {
       try {
         ws.userId = undefined;
 
-        ws.on('close', () => handleSocketClose(ws));
+        const connectedAt = Date.now();
+        let lastMessageAt = connectedAt;
+
+        ws.on('message', () => {
+          lastMessageAt = Date.now();
+        });
+
+        ws.on('close', (code, reason) => {
+          const closedAt = Date.now();
+          const silentMs = closedAt - lastMessageAt;
+
+          const keepAliveTimeout =
+            code === 1006 &&
+            silentMs >= KEEP_ALIVE_PING_MS + KEEP_ALIVE_PONG_WAIT_MS;
+
+          logger.info(
+            'WebSocket closed: user=%s code=%d reason=%s keepAliveTimeout=%s silentMs=%d ageMs=%d ip=%s',
+            ws.userId ?? 'unauthenticated',
+            code,
+            reason.toString() || '-',
+            keepAliveTimeout,
+            silentMs,
+            closedAt - connectedAt,
+            ws.session?.ip ?? '-'
+          );
+
+          handleSocketClose(ws);
+        });
 
         ws.on('error', (err) => {
           logger.error('WebSocket client error:', err);
@@ -312,8 +334,8 @@ const createWsServer = async (server: http.Server) => {
       createContext,
       keepAlive: {
         enabled: true,
-        pingMs: 30_000,
-        pongWaitMs: 5_000
+        pingMs: KEEP_ALIVE_PING_MS,
+        pongWaitMs: KEEP_ALIVE_PONG_WAIT_MS
       }
     });
 

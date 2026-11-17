@@ -5,6 +5,9 @@
   "saveChanges": "Salvar Alterações",
   "confirmActionTitle": "Confirmar Ação",
   "confirmActionMsg": "Tem certeza de que deseja realizar esta ação?",
+  "serverUpdatedTitle": "Servidor atualizado",
+  "serverUpdatedMsg": "Este servidor foi atualizado para uma nova versão. Atualize para carregar a interface mais recente.",
+  "serverUpdatedRefresh": "Atualizar",
   "createChannelTitle": "Criar Novo Canal",
   "channelTypeLabel": "Tipo de canal",
   "textChannelTitle": "Canal de Texto",
@@ -99,5 +102,8 @@
   "shareSystemAudio": "Compartilhar o áudio do sistema",
   "shareSystemAudioAllNote": "O Sharkord compartilha todo o áudio tocando no seu computador, mesmo que você escolha só uma janela. Silencie o que não quiser que os outros ouçam.",
   "additionalScreenShareSettings": "Configurações adicionais de compartilhamento de tela",
-  "screenShareConfirm": "Continuar"
+  "screenShareConfirm": "Continuar",
+  "cropImageTitle": "Recortar imagem",
+  "cropImageZoom": "Zoom",
+  "failedCropImage": "Falha ao recortar a imagem"
 }

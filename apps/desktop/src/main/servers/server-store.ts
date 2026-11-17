@@ -8,6 +8,8 @@ import {
 } from '../../shared/desktop-settings';
 import type { TServer } from '../../shared/types';
 
+const STORE_FILE_NAME = 'servers.json';
+
 type TStore = {
   servers: TServer[];
   railHidden: boolean;
@@ -100,4 +102,4 @@ const writeStore = (filePath: string, store: TStore) => {
   renameSync(tempPath, filePath);
 };
 
-export { DEFAULT_SETTINGS, readStore, writeStore };
+export { DEFAULT_SETTINGS, readStore, STORE_FILE_NAME, writeStore };
