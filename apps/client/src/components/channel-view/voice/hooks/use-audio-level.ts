@@ -1,8 +1,5 @@
 import { useOwnVoiceUser } from '@/features/server/hooks';
-import { useEffect, useRef, useState } from 'react';
-
-// speaking intensity level (0 = silent, 1 = quiet, 2 = normal, 3 = loud)
-// this might need to be optimized
+import { useEffect, useState } from 'react';
 
 enum SpeakingIntensity {
   Silent = 0,
@@ -11,12 +8,21 @@ enum SpeakingIntensity {
   Loud = 3
 }
 
+type TIntensityListener = (intensity: SpeakingIntensity) => void;
+
+type TStreamMonitor = {
+  source: MediaStreamAudioSourceNode;
+  analyser: AnalyserNode;
+  data: Uint8Array<ArrayBuffer>;
+  intensity: SpeakingIntensity;
+  listeners: Set<TIntensityListener>;
+};
+
 const ANALYZER_FFT_SIZE = 512;
 const ANALYZER_MIN_DECIBELS = -90;
 const ANALYZER_MAX_DECIBELS = -10;
 const ANALYZER_SMOOTHING_TIME_CONSTANT = 0.85;
 const SPEAKING_THRESHOLD = 8;
-const LEVEL_POLL_INTERVAL_MS = 50;
 
 const SPEAKING_EFFECT_CLASSES: Record<SpeakingIntensity, string> = {
   [SpeakingIntensity.Silent]: '',
@@ -25,131 +31,169 @@ const SPEAKING_EFFECT_CLASSES: Record<SpeakingIntensity, string> = {
   [SpeakingIntensity.Loud]: 'speaking-effect-high'
 };
 
+const monitors = new Map<MediaStream, TStreamMonitor>();
+
+let audioContext: AudioContext | null = null;
+let frameId: number | null = null;
+
+const getSpeakingIntensity = (level: number) => {
+  if (level <= SPEAKING_THRESHOLD) return SpeakingIntensity.Silent;
+  if (level < 15) return SpeakingIntensity.Quiet;
+  if (level < 30) return SpeakingIntensity.Normal;
+
+  return SpeakingIntensity.Loud;
+};
+
+const pollMonitors = () => {
+  frameId = requestAnimationFrame(pollMonitors);
+
+  monitors.forEach((monitor) => {
+    monitor.analyser.getByteFrequencyData(monitor.data);
+
+    let sum = 0;
+
+    for (let i = 0; i < monitor.data.length; i++) {
+      sum += monitor.data[i] * monitor.data[i];
+    }
+
+    const rms = Math.sqrt(sum / monitor.data.length);
+    const level = Math.min(100, (rms / 255) * 100);
+    const intensity = getSpeakingIntensity(level);
+
+    if (intensity === monitor.intensity) return;
+
+    monitor.intensity = intensity;
+    monitor.listeners.forEach((listener) => listener(intensity));
+  });
+};
+
+const createMonitor = (context: AudioContext, stream: MediaStream) => {
+  const analyser = context.createAnalyser();
+  const source = context.createMediaStreamSource(stream);
+
+  analyser.fftSize = ANALYZER_FFT_SIZE;
+  analyser.minDecibels = ANALYZER_MIN_DECIBELS;
+  analyser.maxDecibels = ANALYZER_MAX_DECIBELS;
+  analyser.smoothingTimeConstant = ANALYZER_SMOOTHING_TIME_CONSTANT;
+
+  source.connect(analyser);
+
+  return {
+    source,
+    analyser,
+    data: new Uint8Array(analyser.frequencyBinCount),
+    intensity: SpeakingIntensity.Silent,
+    listeners: new Set<TIntensityListener>()
+  };
+};
+
+const subscribeToSpeakingIntensity = (
+  stream: MediaStream,
+  listener: TIntensityListener
+) => {
+  if (!audioContext) {
+    audioContext = new AudioContext();
+  }
+
+  let monitor = monitors.get(stream);
+
+  if (!monitor) {
+    monitor = createMonitor(audioContext, stream);
+    monitors.set(stream, monitor);
+  }
+
+  monitor.listeners.add(listener);
+  listener(monitor.intensity);
+
+  if (frameId === null) {
+    frameId = requestAnimationFrame(pollMonitors);
+  }
+
+  const subscribedMonitor = monitor;
+
+  return () => {
+    subscribedMonitor.listeners.delete(listener);
+
+    if (subscribedMonitor.listeners.size > 0) return;
+
+    subscribedMonitor.source.disconnect();
+    monitors.delete(stream);
+
+    if (monitors.size > 0) return;
+
+    if (frameId !== null) {
+      cancelAnimationFrame(frameId);
+      frameId = null;
+    }
+
+    audioContext?.close();
+    audioContext = null;
+  };
+};
+
 const useAudioLevel = (
   audioStream: MediaStream | MediaStream[] | undefined
 ) => {
-  const [audioLevel, setAudioLevel] = useState(0);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [speakingIntensity, setSpeakingIntensity] = useState(
+    SpeakingIntensity.Silent
+  );
   const ownVoiceUser = useOwnVoiceUser();
+  const soundMuted = ownVoiceUser?.state.soundMuted;
 
   useEffect(() => {
-    const streams = Array.isArray(audioStream)
-      ? audioStream
-      : audioStream
-        ? [audioStream]
-        : [];
+    const streams = (
+      Array.isArray(audioStream)
+        ? audioStream
+        : audioStream
+          ? [audioStream]
+          : []
+    ).filter((stream) => stream.getAudioTracks().length > 0);
 
-    if (streams.length === 0 || ownVoiceUser?.state.soundMuted) {
-      setAudioLevel(0);
-      setIsSpeaking(false);
+    if (streams.length === 0 || soundMuted) {
+      setSpeakingIntensity(SpeakingIntensity.Silent);
       return;
     }
 
-    const sources: MediaStreamAudioSourceNode[] = [];
+    const intensities = new Map<MediaStream, SpeakingIntensity>();
+    const unsubscribes: (() => void)[] = [];
 
     try {
-      const AudioContextClass =
-        window.AudioContext ||
-        (window as typeof window & { webkitAudioContext?: typeof AudioContext })
-          .webkitAudioContext;
-
-      const audioContext = new AudioContextClass();
-      const analyser = audioContext.createAnalyser();
-
-      analyser.fftSize = ANALYZER_FFT_SIZE;
-      analyser.minDecibels = ANALYZER_MIN_DECIBELS;
-      analyser.maxDecibels = ANALYZER_MAX_DECIBELS;
-      analyser.smoothingTimeConstant = ANALYZER_SMOOTHING_TIME_CONSTANT;
-
       for (const stream of streams) {
-        if (stream.getAudioTracks().length === 0) {
-          continue;
-        }
+        intensities.set(stream, SpeakingIntensity.Silent);
 
-        const source = audioContext.createMediaStreamSource(stream);
-        source.connect(analyser);
-        sources.push(source);
+        const unsubscribe = subscribeToSpeakingIntensity(
+          stream,
+          (intensity) => {
+            intensities.set(stream, intensity);
+
+            let maxIntensity = SpeakingIntensity.Silent;
+
+            intensities.forEach((value) => {
+              if (value > maxIntensity) {
+                maxIntensity = value;
+              }
+            });
+
+            setSpeakingIntensity(maxIntensity);
+          }
+        );
+
+        unsubscribes.push(unsubscribe);
       }
 
-      if (sources.length === 0) {
-        audioContext.close().catch(() => {});
-        setAudioLevel(0);
-        setIsSpeaking(false);
-        return;
-      }
-
-      audioContextRef.current = audioContext;
-      analyserRef.current = analyser;
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-      const checkAudioLevel = () => {
-        if (!analyserRef.current) return;
-
-        analyserRef.current.getByteFrequencyData(dataArray);
-
-        // calculate rms (root mean square) of the frequency data
-        let sum = 0;
-
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i] * dataArray[i];
-        }
-
-        const rms = Math.sqrt(sum / dataArray.length);
-        const normalizedLevel = Math.min(100, (rms / 255) * 100);
-
-        setAudioLevel(normalizedLevel);
-        setIsSpeaking(normalizedLevel > SPEAKING_THRESHOLD);
+      return () => {
+        unsubscribes.forEach((unsubscribe) => unsubscribe());
+        setSpeakingIntensity(SpeakingIntensity.Silent);
       };
-
-      checkAudioLevel();
-      intervalRef.current = setInterval(
-        checkAudioLevel,
-        LEVEL_POLL_INTERVAL_MS
-      );
     } catch (error) {
+      unsubscribes.forEach((unsubscribe) => unsubscribe());
       console.warn('Audio level detection not supported:', error);
     }
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-
-      for (const source of sources) {
-        source.disconnect();
-      }
-
-      if (audioContextRef.current) {
-        audioContextRef.current.close().catch(() => {});
-        audioContextRef.current = null;
-      }
-
-      analyserRef.current = null;
-      setAudioLevel(0);
-      setIsSpeaking(false);
-    };
-  }, [audioStream, ownVoiceUser?.state.soundMuted]);
-
-  const speakingIntensity = isSpeaking
-    ? audioLevel < 15
-      ? SpeakingIntensity.Quiet
-      : audioLevel < 30
-        ? SpeakingIntensity.Normal
-        : SpeakingIntensity.Loud
-    : SpeakingIntensity.Silent;
-
-  const speakingEffectClass = SPEAKING_EFFECT_CLASSES[speakingIntensity] ?? '';
+  }, [audioStream, soundMuted]);
 
   return {
-    audioLevel,
-    isSpeaking,
-    speakingIntensity,
-    speakingEffectClass
+    isSpeaking: speakingIntensity !== SpeakingIntensity.Silent,
+    speakingEffectClass: SPEAKING_EFFECT_CLASSES[speakingIntensity]
   };
 };
 
